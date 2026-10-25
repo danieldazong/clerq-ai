@@ -1,0 +1,999 @@
+{
+  "name": "Clerq - Your AI Invoice Processor",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        48
+      ],
+      "id": "fb247ec4-94b2-41de-b2ec-2a01e73516a8",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.text }}",
+        "schemaType": "fromJson",
+        "jsonSchemaExample": "{\n  \"vendor_name\": \"Company Name\",\n  \"invoice_number\": \"INV-12345\",\n  \"invoice_date\": \"YYYY-MM-DD\",\n  \"due_date\": \"YYYY-MM-DD\",\n  \"currency\": \"USD\",\n  \"total_amount\": 100.00\n}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1.2,
+      "position": [
+        656,
+        48
+      ],
+      "id": "ca0099f1-c0c8-454a-89d4-9e26b4d99d2e",
+      "name": "Information Extractor"
+    },
+    {
+      "parameters": {
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        560,
+        256
+      ],
+      "id": "97610de8-1dc2-4d6c-b071-54add3fdb11e",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1zaEojVNj2cnwX-6DBGD_NSLQZWktVZgtUFaBfbY6PJ4",
+          "mode": "list",
+          "cachedResultName": "Nouvrix_Invoice_Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1zaEojVNj2cnwX-6DBGD_NSLQZWktVZgtUFaBfbY6PJ4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1zaEojVNj2cnwX-6DBGD_NSLQZWktVZgtUFaBfbY6PJ4/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "vendor_name",
+              "lookupValue": "={{ $json.output.vendor_name }}"
+            },
+            {
+              "lookupColumn": "invoice_number",
+              "lookupValue": "={{ $json.output.invoice_number }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        944,
+        48
+      ],
+      "id": "3ebfca93-7547-44bb-ab44-f757a5e96c2f",
+      "name": "Get row(s) in sheet",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "8hyXiRv72qKqY6MM",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const extraction = $(\"Information Extractor\").first().json.output;\nconst existingRows = $(\"Get row(s) in sheet\").all();\n\n// 1. Check for Duplicate (Accounts for the empty placeholder from \"Always Output Data\")\nconst isDuplicate = existingRows.length > 0 && Object.keys(existingRows[0].json).length > 0;\n\n// 2. Validate Required Fields & Amounts\nconst hasRequiredFields = \n  Boolean(extraction.vendor_name) && \n  Boolean(extraction.invoice_number) && \n  Boolean(extraction.due_date) && \n  typeof extraction.total_amount === 'number' && \n  extraction.total_amount > 0;\n\nlet status = \"VALID\";\nlet failureReason = null;\n\nif (isDuplicate) {\n  status = \"DUPLICATE_REJECTED\";\n  failureReason = \"Invoice already recorded in audit log.\";\n} else if (!hasRequiredFields) {\n  status = \"NEEDS_HUMAN_REVIEW\";\n  failureReason = \"Missing required invoice fields or invalid total amount.\";\n}\n\nreturn {\n  json: {\n    ...extraction,\n    validation_status: status,\n    failure_reason: failureReason,\n    requires_approval: status === \"VALID\" && extraction.total_amount > 1000\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        48
+      ],
+      "id": "6df2b50e-7d3e-464a-b0b4-607e3981b848",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.validation_status }}",
+                    "rightValue": "VALID",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEquals"
+                    },
+                    "id": "5ea351c7-91de-4041-9a67-0a2e1fd829c1"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Error or Duplicate"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "39c1f002-6d3c-4f7e-ab55-da3cfade820c",
+                    "leftValue": "={{ $json.validation_status === 'VALID' && $json.requires_approval === false }}",
+                    "rightValue": "VALID",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Routine Processing"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "774b04ea-0b0a-4f80-9bea-f2cddcf3c692",
+                    "leftValue": "={{ $json.validation_status === 'VALID' && $json.requires_approval === true }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Requires Approval"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1296,
+        32
+      ],
+      "id": "35a4e28b-5a05-44a0-a508-c2bd0e2a4caa",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1zaEojVNj2cnwX-6DBGD_NSLQZWktVZgtUFaBfbY6PJ4",
+          "mode": "list",
+          "cachedResultName": "Nouvrix_Invoice_Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1zaEojVNj2cnwX-6DBGD_NSLQZWktVZgtUFaBfbY6PJ4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1zaEojVNj2cnwX-6DBGD_NSLQZWktVZgtUFaBfbY6PJ4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "vendor_name": "={{ $json.vendor_name }}",
+            "invoice_number": "={{ $json.invoice_number }}",
+            "invoice_date": "=",
+            "failure_reason": "={{ $json.failure_reason }}",
+            "status": "={{ $json.validation_status }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "vendor_name",
+              "displayName": "vendor_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_number",
+              "displayName": "invoice_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_date",
+              "displayName": "invoice_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "due_date",
+              "displayName": "due_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_amount",
+              "displayName": "total_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "failure_reason",
+              "displayName": "failure_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "approval_decision",
+              "displayName": "approval_decision",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "decision_timestamp",
+              "displayName": "decision_timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1488,
+        -176
+      ],
+      "id": "5918efda-1cb7-405e-a12b-fd9a6aa8259d",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "8hyXiRv72qKqY6MM",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1zaEojVNj2cnwX-6DBGD_NSLQZWktVZgtUFaBfbY6PJ4",
+          "mode": "list",
+          "cachedResultName": "Nouvrix_Invoice_Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1zaEojVNj2cnwX-6DBGD_NSLQZWktVZgtUFaBfbY6PJ4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1zaEojVNj2cnwX-6DBGD_NSLQZWktVZgtUFaBfbY6PJ4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "vendor_name": "={{ $json.vendor_name }}",
+            "invoice_number": "={{ $json.invoice_number }}",
+            "invoice_date": "={{ $json.invoice_date }}",
+            "due_date": "={{ $json.due_date }}",
+            "currency": "={{ $json.currency }}",
+            "total_amount": "={{ $json.total_amount }}",
+            "status": "READY_FOR_ROUTINE_PROCESSING"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "vendor_name",
+              "displayName": "vendor_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_number",
+              "displayName": "invoice_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_date",
+              "displayName": "invoice_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "due_date",
+              "displayName": "due_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_amount",
+              "displayName": "total_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "failure_reason",
+              "displayName": "failure_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "approval_decision",
+              "displayName": "approval_decision",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "decision_timestamp",
+              "displayName": "decision_timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1616,
+        16
+      ],
+      "id": "3c44a26c-6002-4e56-aaa3-5bdf6f288e6b",
+      "name": "Append row in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "8hyXiRv72qKqY6MM",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "q": "invoice has:attachment filename:pdf"
+        },
+        "options": {
+          "downloadAttachments": true
+        }
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        80,
+        48
+      ],
+      "id": "f5917cd4-eb8c-4ea0-b53b-cab7242d86eb",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "jGfW8xL9WNchjjaz",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const newItems = [];\n\nfor (const item of $input.all()) {\n  if (!item.binary) continue;\n  \n  // Loop through attachment_0, attachment_1, etc.\n  for (const key of Object.keys(item.binary)) {\n    const file = item.binary[key];\n    \n    // 1. Ensure the file is a PDF\n    const isPDF = file.mimeType === 'application/pdf';\n    \n    // 2. Ensure the file name does NOT contain the word \"receipt\"\n    const fileName = (file.fileName || \"\").toLowerCase();\n    const isNotReceipt = !fileName.includes('receipt');\n    \n    // Only pass the file forward if it passes both tests\n    if (isPDF && isNotReceipt) {\n      newItems.push({\n        json: {\n          ...item.json,\n          source_email_subject: item.json.subject,\n          original_attachment_key: key,\n          processed_filename: file.fileName\n        },\n        binary: {\n          data: file // Standardizes the name to 'data'\n        }\n      });\n    }\n  }\n}\n\nreturn newItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        48
+      ],
+      "id": "99ee5eec-b0a5-4312-94a2-c3c5878f138f",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1zaEojVNj2cnwX-6DBGD_NSLQZWktVZgtUFaBfbY6PJ4",
+          "mode": "list",
+          "cachedResultName": "Nouvrix_Invoice_Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1zaEojVNj2cnwX-6DBGD_NSLQZWktVZgtUFaBfbY6PJ4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1zaEojVNj2cnwX-6DBGD_NSLQZWktVZgtUFaBfbY6PJ4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "PENDING_MANAGER_APPROVAL",
+            "vendor_name": "={{ $json.vendor_name }}",
+            "invoice_number": "={{ $json.invoice_number }}",
+            "invoice_date": "={{ $json.invoice_date }}",
+            "due_date": "={{ $json.due_date }}",
+            "currency": "={{ $json.currency }}",
+            "total_amount": "={{ $json.total_amount }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "vendor_name",
+              "displayName": "vendor_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_number",
+              "displayName": "invoice_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_date",
+              "displayName": "invoice_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "due_date",
+              "displayName": "due_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_amount",
+              "displayName": "total_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "failure_reason",
+              "displayName": "failure_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "approval_decision",
+              "displayName": "approval_decision",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "decision_timestamp",
+              "displayName": "decision_timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1536,
+        288
+      ],
+      "id": "442c1a55-bd9f-4326-8b79-3809ea461c03",
+      "name": "Append row in sheet2",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "8hyXiRv72qKqY6MM",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "global.nouvrix@gmail.com",
+        "subject": "=Approval Required: {{ $('Switch').item.json.vendor_name }} - ${{ $('Switch').item.json.total_amount }}",
+        "message": "=<h2>Invoice Approval Required</h2>\n<p><strong>Vendor:</strong> {{ $('Switch').item.json.vendor_name }}</p>\n<p><strong>Invoice #:</strong> {{ $('Switch').item.json.invoice_number }}</p>\n<p><strong>Total Amount:</strong> ${{ $('Switch').item.json.total_amount }}</p>\n<br>\n<a href=\"{{ $execution.resumeUrl }}&decision=APPROVED\" style=\"padding: 10px 20px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px;\">APPROVE</a>\n&nbsp;&nbsp;&nbsp;\n<a href=\"{{ $execution.resumeUrl }}&decision=REJECTED\" style=\"padding: 10px 20px; background-color: #dc3545; color: white; text-decoration: none; border-radius: 5px;\">REJECT</a>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1760,
+        288
+      ],
+      "id": "d5da7362-333b-474d-951b-322af094cb9c",
+      "name": "Send a message",
+      "webhookId": "9a9dbf99-8681-43e4-9224-da430ceeb813",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "jGfW8xL9WNchjjaz",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1984,
+        288
+      ],
+      "id": "e200fc2e-9313-4d54-adad-b04893addef0",
+      "name": "Wait",
+      "webhookId": "3b1aeef0-5be2-4ef2-b077-dc1de12bc6f2"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1zaEojVNj2cnwX-6DBGD_NSLQZWktVZgtUFaBfbY6PJ4",
+          "mode": "list",
+          "cachedResultName": "Nouvrix_Invoice_Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1zaEojVNj2cnwX-6DBGD_NSLQZWktVZgtUFaBfbY6PJ4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1zaEojVNj2cnwX-6DBGD_NSLQZWktVZgtUFaBfbY6PJ4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "={{ $json.query.decision === 'APPROVED' ? 'APPROVED' : 'REJECTED' }}",
+            "approval_decision": "={{ $json.query.decision }}",
+            "decision_timestamp": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "vendor_name",
+              "displayName": "vendor_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_number",
+              "displayName": "invoice_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_date",
+              "displayName": "invoice_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "due_date",
+              "displayName": "due_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_amount",
+              "displayName": "total_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "failure_reason",
+              "displayName": "failure_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "approval_decision",
+              "displayName": "approval_decision",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "decision_timestamp",
+              "displayName": "decision_timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2208,
+        288
+      ],
+      "id": "17555d81-3697-47df-a707-edb1baf7414a",
+      "name": "Append row in sheet3",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "8hyXiRv72qKqY6MM",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Information Extractor": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append row in sheet2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet2": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "9b4608ca-00f6-41b3-9cde-3d2ab709d80f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e1bdeb32b9f3218944a0135bb7df4864820714155dfba95d22b7ca313ab22666"
+  },
+  "nodeGroups": [],
+  "id": "9U3PWdmdm7J5EKxp",
+  "tags": []
+}

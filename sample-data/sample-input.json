@@ -1,0 +1,7 @@
+{
+  "request_id": "[REPLACE_MOCK_UUID]",
+  "payload": {
+    "key": "[REPLACE_MOCK_VALUE]"
+  },
+  "timestamp": "[REPLACE_ISO_TIMESTAMP]"
+}
