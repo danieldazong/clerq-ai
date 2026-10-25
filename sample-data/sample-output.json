@@ -1,6 +1,14 @@
 {
-  "status": "success",
-  "data": {
-    "result": "[REPLACE_EXPECTED_RESULT]"
-  }
+  "vendor_name": "ABC Technology Services",
+  "invoice_number": "INV-2026-1045",
+  "invoice_date": "2026-10-15",
+  "due_date": "2026-11-02",
+  "currency": "USD",
+  "total_amount": 7500.00,
+  "validation_status": "VALID",
+  "failure_reason": null,
+  "requires_approval": true,
+  "status": "APPROVED",
+  "approval_decision": "APPROVED",
+  "decision_timestamp": "2026-10-25T14:30:00.000Z"
 }
