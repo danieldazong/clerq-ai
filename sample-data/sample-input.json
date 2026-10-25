@@ -1,7 +1,8 @@
 {
-  "request_id": "[REPLACE_MOCK_UUID]",
-  "payload": {
-    "key": "[REPLACE_MOCK_VALUE]"
-  },
-  "timestamp": "[REPLACE_ISO_TIMESTAMP]"
+  "vendor_name": "ABC Technology Services",
+  "invoice_number": "INV-2026-1045",
+  "invoice_date": "2026-10-15",
+  "due_date": "2026-11-02",
+  "currency": "USD",
+  "total_amount": 7500.00
 }
